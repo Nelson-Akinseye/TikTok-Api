@@ -11,7 +11,8 @@ async def get_hashtag_videos():
             ms_tokens=[ms_token],
             num_sessions=1,
             sleep_after=3,
-            browser=os.getenv("TIKTOK_BROWSER", "chromium"),
+            browser=os.getenv("TIKTOK_BROWSER", "webkit"),
+            headless=False
         )
         tag = api.hashtag(name="funny")
         async for video in tag.videos(count=30):

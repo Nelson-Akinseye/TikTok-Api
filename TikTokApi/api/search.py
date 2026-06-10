@@ -42,6 +42,34 @@ class Search:
             yield user
 
     @staticmethod
+    async def vids(search_term, count=10, cursor=0, **kwargs) -> AsyncIterator[Video]:
+        """
+        Searches for users.
+
+        Note: Your ms_token needs to have done a search before for this to work.
+
+        Args:
+            search_term (str): The phrase you want to search for.
+            count (int): The amount of users you want returned.
+
+        Returns:
+            async iterator/generator: Yields TikTokApi.user objects.
+
+        Raises:
+            InvalidResponseException: If TikTok returns an invalid response, or one we don't understand.
+
+        Example Usage:
+            .. code-block:: python
+
+                async for user in api.search.users('david teather'):
+                    # do something
+        """
+        async for video in Search.search_type(
+            search_term, "item", count=count, cursor=cursor, **kwargs
+        ):
+            yield video
+
+    @staticmethod
     async def search_type(
         search_term, obj_type, count=10, cursor=0, **kwargs
     ) -> AsyncIterator:
@@ -76,7 +104,7 @@ class Search:
                 "keyword": search_term,
                 "cursor": cursor,
                 "from_page": "search",
-                "web_search_code": """{"tiktok":{"client_params_x":{"search_engine":{"ies_mt_user_live_video_card_use_libra":1,"mt_search_general_user_live_card":1}},"search_server":{}}}""",
+                "web_search_code": """{"tiktok":{"client_params_x":{"search_engine":{"ies_mt_video_live_video_card_use_libra":1,"mt_search_general_video_live_card":1}},"search_server":{}}}""",
             }
 
             if search_id != "":
@@ -88,12 +116,13 @@ class Search:
                 headers=kwargs.get("headers"),
                 session_index=kwargs.get("session_index"),
             )
+        
 
             if resp is None:
                 raise InvalidResponseException(
                     resp, "TikTok returned an invalid response."
                 )
-
+           
             if obj_type == "user":
                 for user in resp.get("user_list", []):
                     sec_uid = user.get("user_info").get("sec_uid")
