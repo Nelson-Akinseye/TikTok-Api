@@ -11,6 +11,7 @@ from sentence_transformers import SentenceTransformer,util
 import numpy as np
 import emoji
 from lingua import Language, LanguageDetectorBuilder
+import re
 
 # All transformer model initalizations 
 classifier = pipeline("sentiment-analysis", model="j-hartmann/sentiment-roberta-large-english-3-classes")
@@ -20,30 +21,27 @@ semantic_model = SentenceTransformer("all-MiniLM-L6-v2")
 detector = LanguageDetectorBuilder.from_languages(Language.ENGLISH).build()
 
 # Semantic encodings phrases
-meaning0 = "dopamine"
+meaning0 = "happy"
 meaning1 = "detoxing"
 meaning2 = "stress relief"
 meaning3 = "feeling better"
 meaning4 = "helpful video"
 
-# Query embeddings initializations (creating vectors)
 query_embedding0 = semantic_model.encode(meaning0, convert_to_tensor=True)
 query_embedding1 = semantic_model.encode(meaning1, convert_to_tensor=True)
 query_embedding2 = semantic_model.encode(meaning2, convert_to_tensor=True)
 query_embedding3 = semantic_model.encode(meaning3, convert_to_tensor=True)
 query_embedding4 = semantic_model.encode(meaning4, convert_to_tensor=True)
 
-# Query dictionary 
 dictQuery = {0:query_embedding0,1:query_embedding1,2:query_embedding2,3:query_embedding3,4:query_embedding4}
 
-# Removes all texts that is comprised of all emojis, in a language other than English, is a Gif or a empty string
 def allEmojiOrOtherLanguage(text):
     clean_text = text.replace(" ", "")
     if not clean_text:
-        return True
-    return all(emoji.is_emoji(char) for char in clean_text) or not (detector.detect_language_of(text) == Language.ENGLISH) or text == "[Sticker]"
+        return False
+    return all(emoji.is_emoji(char) for char in clean_text) or not (detector.detect_language_of(text) == Language.ENGLISH)
 
-# Cleanses text based on semantic encoding phrases
+
 def cleanseText(listofComments):
     newListofComments = []
     phrase_embeddings = semantic_model.encode(listofComments, convert_to_tensor=True)
@@ -54,6 +52,10 @@ def cleanseText(listofComments):
             if meaningCount >= 1:
                 break
             if allEmojiOrOtherLanguage(listofComments[j]):
+                continue
+            if listofComments[j] == "":
+                continue
+            if listofComments[j] == "[Sticker]":
                 continue
             if score > 0.30:
                 newListofComments.append(listofComments[j])
@@ -74,32 +76,31 @@ def cleanseText(listofComments):
 # General Initializations
 video_id = ""
 ms_token = os.environ.get("ms_token",None)
-searchBar = input("Type Search Term or Phrase: ")
-try:
-    amountOfVideos = int(input("Type in Amount of Videos to Scrape: "))
-except:
-    print("Not a valid Number")
-# String to List dictionary (Video ID -> List of Comments)
+VideoIDList = []
 dictionary = {}
 # List of strings
 rawComments = []
-# list of lists (2d array)
 allComments = []
+inputFile = input("Type File Name")
+
+with open(inputFile,"r") as f:
+    for i in f:
+        vidID = re.search(r'\d{19}',i)
+        if vidID:
+            VideoIDList.append(vidID.group())
 
 
-# adds valid comments to appropiate list
 def addComments(dict,videoID):
     listofComments = cleanseText(dict[videoID])
     for comment in listofComments:
         rawComments.append(comment)
 
-# Determines sentiment score for phrase
+
 def sentiment(string):
     results = classifier(string)
     return f"::- {results[0]["label"]}, {results[0]["score"]}"
 
-# Full data scraper to sentiment analysis pipeline
-async def mainProgram():
+async def SearchTerm():
     async with TikTokApi() as api:
         await api.create_sessions(
             ms_tokens=[ms_token],
@@ -108,60 +109,22 @@ async def mainProgram():
             browser=os.getenv("TIKTOK_BROWSER", "firefox"),
             headless=False
         )
-
-        with open(searchBar + ".csv", "w", newline="", encoding="utf-8") as file:
-            writer = csv.writer(file)
-            writer.writerow([
-                "VIDEO_ID",
-                "video_url",
-                "caption",
-                "post_creation_date",
-                "time_collected",
-                "username",
-                "display_name",
-                "likes",
-                "comments",
-                "bookmarks",
-                "shares",
-                "views",
-                "hashtags"
-            ])
-       
-            async for vids in api.search.vids(searchBar,amountOfVideos):
-                data = vids.as_dict
-                video_id = data.get("id")
-                writer.writerow([
-                data.get("id"),
-                f"https://www.tiktok.com/@{data.get('author', {}).get('uniqueId')}/video/{data.get('id')}",
-                data.get("desc"),
-                datetime.datetime.fromtimestamp(data.get("createTime")),
-                datetime.datetime.now(),
-                data.get("author", {}).get("uniqueId"),
-                data.get("author", {}).get("nickname"),
-                data.get("stats", {}).get("diggCount"),
-                data.get("stats", {}).get("commentCount"),
-                data.get("stats", {}).get("collectCount"),
-                data.get("stats", {}).get("shareCount"),
-                data.get("stats", {}).get("playCount"),
-                "|".join(
-                    tag.get("hashtagName")
-                    for tag in data.get("textExtra", [])
-                    if tag.get("hashtagName") )])
-                async for comment in api.video(video_id).comments(20):
-                    dataC = comment.as_dict
-                    if video_id not in dictionary:
-                        dictionary[video_id] = [dataC.get("text")]
-                    else:
-                        dictionary[video_id].append(dataC.get("text"))
-                thread = threading.Thread(target=addComments, args=(dictionary,video_id))
-                thread.start()
+        for video in VideoIDList:
+            async for comment in api.video(video).comments(20):
+                dataC = comment.as_dict
+                if video not in dictionary:
+                    dictionary[video] = [dataC.get("text")]
+                else:
+                    dictionary[video].append(dataC.get("text"))
+            thread = threading.Thread(target=addComments, args=(dictionary,video))
+            thread.start()
     thread.join()
 
     if allComments:
         kmeans = KMeans(n_clusters=4, random_state=42)
         kmeans.fit(allComments)
 
-        with open("commentGroups.txt", "w", encoding="utf-8") as files:
+        with open("commentGroupss.txt", "w", encoding="utf-8") as files:
              for text, label in zip(rawComments, kmeans.labels_):
                 files.write(f"Groups {label}: {text} {sentiment(text)} \n")
     else:
@@ -169,4 +132,4 @@ async def mainProgram():
             
 
 if __name__ == "__main__":
-    asyncio.run(mainProgram())
+    asyncio.run(SearchTerm())

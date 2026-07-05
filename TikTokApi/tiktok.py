@@ -875,6 +875,11 @@ class TikTokApi:
         while retry_count < retries:
             retry_count += 1
             try:
+               
+
+                cookies = await self.get_session_cookies(session)
+
+          
                 result = await self.run_fetch_script(
                     signed_url, headers=headers, session_index=i
                 )
