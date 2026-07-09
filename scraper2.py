@@ -104,7 +104,7 @@ async def SearchTerm():
         )
         for video in VideoIDList:
             try:
-                async for comment in api.video(video).comments(20):
+                async for comment in api.video(video).comments(500):
                     dataC = comment.as_dict
                     if video not in dictionary:
                         dictionary[video] = [dataC.get("text")]
