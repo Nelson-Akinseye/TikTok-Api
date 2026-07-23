@@ -1,3 +1,6 @@
+# Takes a file with line separated tiktok URLs and performs Topic Modeling + Sentiment Analysis on the comments of those videos 
+
+
 # All imports
 from TikTokApi import TikTokApi
 import asyncio
@@ -13,7 +16,6 @@ from sentence_transformers import SentenceTransformer,util
 import emoji
 from lingua import Language, LanguageDetectorBuilder
 import re
-
 # All transformer model initalizations 
 classifier = pipeline("sentiment-analysis", model="j-hartmann/sentiment-roberta-large-english-3-classes")
 model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
